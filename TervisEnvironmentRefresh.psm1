@@ -5,9 +5,9 @@ function Invoke-EnvironmentRefreshProcessForStores {
     $StoreDetails = Get-EnvironmentRefreshStoreDetails -List
     foreach($Store in $StoreDetails){
         $sqlquery = "USE master ; DROP DATABASE $($Store.Databasename)"
-        "Invoke-Sqlcmd -ServerInstance $($Store.Computername) -Query $sqlquery"
+        Invoke-Sqlcmd -ServerInstance $($Store.Computername) -Query $sqlquery
     }
-    "Invoke-Command -ComputerName dpm2012r2-1 -FilePath $StoresRestoreScript"
+    Invoke-Command -ComputerName dpm2012r2-1 -FilePath $StoresRestoreScript
 }
 
 function Invoke-EnvironmentRefreshProcess {
@@ -21,28 +21,28 @@ function Invoke-EnvironmentRefreshProcess {
     $snapshots = Get-SnapshotsFromVNX -TervisStorageArraySelection ALL
     
     if($RefreshType -eq "SQL"){
-        "Invoke-Command -ComputerName $Computername -ScriptBlock {Stop-Service mssqlserver}"
+        Invoke-Command -ComputerName $Computername -ScriptBlock {Stop-Service mssqlserver}
     }
     if($RefreshType -eq "Sybase"){
-        "Invoke-Command -ComputerName $Computername -ScriptBlock {Stop-Service SQLANYs_TervisDatabase}"
-        "Invoke-Command -ComputerName $Computername -ScriptBlock {Copy-Item 'D:\QcSoftware\Config','D:\QcSoftware\database.opts','D:\QcSoftware\profile.bat' 'C:\WCS Control' -Recurse -force}"
+        Invoke-Command -ComputerName $Computername -ScriptBlock {Stop-Service SQLANYs_TervisDatabase}
+        Invoke-Command -ComputerName $Computername -ScriptBlock {Copy-Item 'D:\QcSoftware\Config','D:\QcSoftware\database.opts','D:\QcSoftware\profile.bat' 'C:\WCS Control' -Recurse -force}
     }
     foreach($target in $TargetDetails){
         $SanLocation = Get-EnvironmentRefreshLUNDetails -DatabaseName $($Target.Databasename)
         $SnapshottoAttach = $snapshots | where { $_.snapname -like "*$Computername*" -and $_.snapname -like "*$($target.DatabaseName)*"} | Sort-Object -Descending -Property CreationTime | select -first 1
 
-        "Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Offline"
-        "Dismount-VNXSnapshot -SMPID $($Target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)"
+        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Offline
+        Dismount-VNXSnapshot -SMPID $($Target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
         
-        "Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID)"
-        "Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Online"
+        Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID)
+        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Online
     }
     if($RefreshType -eq "SQL"){
-        "Invoke-Command -ComputerName $Computername -ScriptBlock {Start-Service mssqlserver}"
+        Invoke-Command -ComputerName $Computername -ScriptBlock {Start-Service mssqlserver}
     }
     if($RefreshType -eq "Sybase"){
-        "Invoke-Command -ComputerName $Computername -ScriptBlock {Copy-Item 'C:\WCS Control\config','C:\WCS Control\database.opts','C:\WCS Control\profile.bat' D:\QcSoftware -Recurse -force }"
-        "Invoke-Command -ComputerName $Computername -ScriptBlock {Start-Service SQLANYs_TervisDatabase}"
+        Invoke-Command -ComputerName $Computername -ScriptBlock {Copy-Item 'C:\WCS Control\config','C:\WCS Control\database.opts','C:\WCS Control\profile.bat' D:\QcSoftware -Recurse -force }
+        Invoke-Command -ComputerName $Computername -ScriptBlock {Start-Service SQLANYs_TervisDatabase}
     }
 }
 
