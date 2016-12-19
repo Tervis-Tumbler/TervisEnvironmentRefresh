@@ -18,10 +18,12 @@ function Invoke-EnvironmentRefreshProcess {
         [Parameter(Mandatory)]$Computername
     )
     $TargetDetails = Get-EnvironmentRefreshTargetDetails -Hostname $Computername
+    Write-Verbose "Retrieving Snapshots"
     $snapshots = Get-SnapshotsFromVNX -TervisStorageArraySelection ALL
     
     if($RefreshType -eq "SQL"){
-        Invoke-Command -ComputerName $Computername -ScriptBlock {Stop-Service mssqlserver}
+        Write-Verbose "Stopping SQL Service"
+        Invoke-Command -ComputerName $Computername -ScriptBlock {Stop-Service mssqlserver -force}
     }
     if($RefreshType -eq "Sybase"){
         Invoke-Command -ComputerName $Computername -ScriptBlock {Stop-Service SQLANYs_TervisDatabase}
@@ -31,14 +33,23 @@ function Invoke-EnvironmentRefreshProcess {
         $SanLocation = Get-EnvironmentRefreshLUNDetails -DatabaseName $($Target.Databasename)
         $SnapshottoAttach = $snapshots | where { $_.snapname -like "*$Computername*" -and $_.snapname -like "*$($target.DatabaseName)*"} | Sort-Object -Descending -Property CreationTime | select -first 1
 
+        Write-Verbose "Setting Disk $($target.DiskNumber) Offline"
         Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Offline
+        Write-Verbose "Dismounting $($target.SMPID)"
         Dismount-VNXSnapshot -SMPID $($Target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
         
-        Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID)
+        Write-Verbose "Mounting $($SnapshottoAttach.SnapName)"
+        Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
+        Write-Verbose "Setting disk $($target.disknumber) online"
         Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Online
+        write-host "Breakpoint"
     }
     if($RefreshType -eq "SQL"){
+        Write-Verbose "Starting SQL service"
         Invoke-Command -ComputerName $Computername -ScriptBlock {Start-Service mssqlserver}
+        Write-Verbose "Starting SQL Agent"
+        Invoke-Command -ComputerName $Computername -ScriptBlock {start-service sqlserveragent}
+        
     }
     if($RefreshType -eq "Sybase"){
         Invoke-Command -ComputerName $Computername -ScriptBlock {Copy-Item 'C:\WCS Control\config','C:\WCS Control\database.opts','C:\WCS Control\profile.bat' D:\QcSoftware -Recurse -force }
@@ -229,6 +240,14 @@ $EnvironmentRefreshLUNDetails = [pscustomobject][ordered]@{
     Databasename = "Tervis"
     RefreshType = "Disk"
     SANLocation = "VNX5300"
+},
+[pscustomobject][ordered]@{
+    Computername = "EBSDB-PRD"
+    LUNID = "1745"
+    LUNName = "P-WCSDATA"
+    Databasename = "Tervis"
+    RefreshType = "Disk"
+    SANLocation = "VNX5300"
 }
 
 $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
@@ -274,7 +293,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "Tervis_RMSHQ1"
     RefreshType = "DB"
     DiskNumber = "6"
-    SMPID = "3955"
+    SMPID = "63836"
 },
 [pscustomobject][ordered]@{
     Computername = "DLT-WCSSybase"
@@ -328,7 +347,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "Tervis_RMSHQ1"
     RefreshType = "DB"
     DiskNumber = "9"
-    SMPID = "3914"
+    SMPID = "63835"
 },
 [pscustomobject][ordered]@{
     Computername = "EPS-WCSSybase"
@@ -338,6 +357,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     RefreshType = "Disk"
     DiskNumber = "3"
     SMPID = "4000"
+}
 
 
 $EnvironmentRefreshStoreDetails = [pscustomobject][ordered]@{
