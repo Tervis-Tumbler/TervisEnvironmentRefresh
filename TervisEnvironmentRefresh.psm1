@@ -1,13 +1,22 @@
 ﻿#Requires -Modules TervisEnvironment,TervisStorage
 
 function Invoke-EnvironmentRefreshProcessForStores {
+    param(
+        [ValidateSet(”Delta”,“Epsilon”,"ALL")]
+        [String]$EnvironmentName
+    )
+    if($EnvironmentName -eq "ALL"){
+        $EnvironmentList = Get-EnvironmentRefreshStoreDetails -List
+    }
+    else{$EnvironmentList = $EnvironmentName}
+    $StoreDetails = Get-EnvironmentRefreshStoreDetails -Environment $EnvironmentName
+
     $StoresRestoreScript = "//fs1/disasterrecovery/Source Controlled Items/Refresh Scripts/StoresRestore.ps1"
-    $StoreDetails = Get-EnvironmentRefreshStoreDetails -List
     foreach($Store in $StoreDetails){
-        $sqlquery = "USE master ; DROP DATABASE $($Store.Databasename)"
+        $sqlquery = "ALTER DATABASE [$Store.Databasename] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; GO; USE master; GO; DROP DATABASE $($Store.Databasename); GO;"
         Invoke-Sqlcmd -ServerInstance $($Store.Computername) -Query $sqlquery
     }
-    Invoke-Command -ComputerName dpm2012r2-1 -FilePath $StoresRestoreScript
+    #Invoke-Command -ComputerName inf-dpm2016hq1 -FilePath $StoresRestoreScript
 }
 
 function Invoke-EnvironmentRefreshProcess {
@@ -31,17 +40,17 @@ function Invoke-EnvironmentRefreshProcess {
     }
     foreach($target in $TargetDetails){
         $SanLocation = Get-EnvironmentRefreshLUNDetails -DatabaseName $($Target.Databasename)
-        $SnapshottoAttach = $snapshots | where { $_.snapname -like "*$Computername*" -and $_.snapname -like "*$($target.DatabaseName)*"} | Sort-Object -Descending -Property CreationTime | select -first 1
+        $SnapshottoAttach = $snapshots | where { $_.snapname -like "*$Computername*" -and $_.snapname -like "*$($target.DatabaseName)*"} | select -last 1
 
         Write-Verbose "Setting Disk $($target.DiskNumber) Offline"
-        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Offline
+        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -DriveLetter $($Target.DriveLetter) -State Offline
         Write-Verbose "Dismounting $($target.SMPID)"
         Dismount-VNXSnapshot -SMPID $($Target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
         
         Write-Verbose "Mounting $($SnapshottoAttach.SnapName)"
         Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
         Write-Verbose "Setting disk $($target.disknumber) online"
-        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Online
+        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -DriveLetter $($Target.DriveLetter) -State Online
         write-host "Breakpoint"
     }
     if($RefreshType -eq "SQL"){
@@ -63,31 +72,40 @@ function Set-EnvironmentRefreshDiskState{
         
         [Parameter(Mandatory)]$DiskNumber,
 
+        [Parameter(Mandatory)]$DriveLetter,
+
         [ValidateSet("Online","Offline")]
         [Parameter(Mandatory)]$State
     )
     
-    $Session = New-PSSession -ComputerName $Computername
-    $DiskOfflineCommandFile = @"
+#    $Session = New-PSSession -ComputerName $Computername
+    if($state -eq "online"){
+        $DiskOfflineCommandFile = @"
 select disk $($DiskNumber)
 $($State) disk
 "@
-    
-    Invoke-Command -Session $Session -ScriptBlock {param($DiskOfflineCommandFile)
+    }
+    if($State -eq "offline"){
+        $DiskOfflineCommandFile = @"
+select disk $($DiskNumber)
+$($State) disk
+"@
+    }
+    Invoke-Command -ComputerName $Computername -ScriptBlock {param($DiskOfflineCommandFile)
         $TempCommandfileLocation = [system.io.path]::GetTempFileName()
         $DiskOfflineCommandFile | Out-File -FilePath $TempCommandfileLocation -Encoding ascii
         & diskpart.exe /s $TempCommandfileLocation
         Remove-Item $TempCommandfileLocation -Force
     } -Args $DiskOfflineCommandFile
     
-    Disconnect-PSSession $session
+#    Disconnect-PSSession $session
 
 }
 
 
 function New-EnvironmentRefreshSnapshot{
     param(
-        [ValidateSet(”DB_IMS”,“DB_MES”,"DB_ICMS","DB_Shipping","DB_Tervis_RMSHQ1","P-WCSDATA","ALL")]
+        [ValidateSet(”DB_IMS”,“DB_MES”,"DB_ICMS","DB_Shipping","DB_RMSHQ_2017","P-WCSDATA","ALL")]
         [String]$LUNName,
 
         [ValidateSet(”Delta”,“Epsilon”,"ALL")]
@@ -227,22 +245,14 @@ $EnvironmentRefreshLUNDetails = [pscustomobject][ordered]@{
 },
 [pscustomobject][ordered]@{
     Computername = "SQL"
-    LUNID = "30"
-    LUNName = "DB_Tervis_RMSHQ1"
+    LUNID = "1011"
+    LUNName = "DB_TervisRMSHQ1"
     Databasename = "Tervis_RMSHQ1"
     RefreshType = "DB"
-    SANLocation = "VNX5200"
-},
-[pscustomobject][ordered]@{
-    Computername = "P-WCS"
-    LUNID = "1745"
-    LUNName = "P-WCSDATA"
-    Databasename = "Tervis"
-    RefreshType = "Disk"
     SANLocation = "VNX5300"
 },
 [pscustomobject][ordered]@{
-    Computername = "EBSDB-PRD"
+    Computername = "P-WCS"
     LUNID = "1745"
     LUNName = "P-WCSDATA"
     Databasename = "Tervis"
@@ -311,6 +321,8 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "DB_MES"
     RefreshType = "DB"
     DiskNumber = "4"
+    DriveLetter = "I"
+    VolumeNumber = "7"
     SMPID = "3997"
 },
 [pscustomobject][ordered]@{
@@ -320,6 +332,8 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "DB_IMS"
     RefreshType = "DB"
     DiskNumber = "5"
+    DriveLetter = "P"
+    VolumeNumber = "8"
     SMPID = "3996"
 },
 [pscustomobject][ordered]@{
@@ -329,6 +343,8 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "DB_ICMS"
     RefreshType = "DB"
     DiskNumber = "10"
+    DriveLetter = "K"
+    VolumeNumber = "12"
     SMPID = "3912"
 },
 [pscustomobject][ordered]@{
@@ -338,16 +354,20 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "DB_Shipping"
     RefreshType = "DB"
     DiskNumber = "8"
+    DriveLetter = "J"
+    VolumeNumber = "11"
     SMPID = "3977"
 },
 [pscustomobject][ordered]@{
     Computername = "EPS-SQL"
     EnvironmentName = "Epsilon"
     DatabaseName = "Tervis_RMSHQ1"
-    VolumeName = "Tervis_RMSHQ1"
+    VolumeName = "DB_Tervis_RMSHQ1_VNX5300"
     RefreshType = "DB"
-    DiskNumber = "9"
-    SMPID = "63835"
+    DiskNumber = "13"
+    DriveLetter = "F"
+    VolumeNumber = "13"
+    SMPID = "4068"
 },
 [pscustomobject][ordered]@{
     Computername = "EPS-WCSSybase"
@@ -356,6 +376,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "Data"
     RefreshType = "Disk"
     DiskNumber = "3"
+    DriveLetter = "D"
     SMPID = "4000"
 }
 
