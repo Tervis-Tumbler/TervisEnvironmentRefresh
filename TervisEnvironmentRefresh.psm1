@@ -13,8 +13,8 @@ function Invoke-EnvironmentRefreshProcessForStores {
 
     $StoresRestoreScript = "//fs1/disasterrecovery/Source Controlled Items/Refresh Scripts/StoresRestore.ps1"
     foreach($Store in $StoreDetails){
-        $sqlquery = "ALTER DATABASE [$Store.Databasename] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; GO; USE master; GO; DROP DATABASE $($Store.Databasename); GO;"
-        Invoke-Sqlcmd -ServerInstance $($Store.Computername) -Query $sqlquery
+        
+        Invoke-Sql -dataSource $($Store.Computername) -database $($Store.Databasename) -sqlCommand 'ALTER DATABASE [$($Store.Databasename)] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; GO; USE master; GO; DROP DATABASE $($Store.Databasename); GO;'
     }
     #Invoke-Command -ComputerName inf-dpm2016hq1 -FilePath $StoresRestoreScript
 }
@@ -30,40 +30,61 @@ function Invoke-EnvironmentRefreshProcess {
     Write-Verbose "Retrieving Snapshots"
     $snapshots = Get-SnapshotsFromVNX -TervisStorageArraySelection ALL
     
-    if($RefreshType -eq "SQL"){
-        Write-Verbose "Stopping SQL Service"
-        Invoke-Command -ComputerName $Computername -ScriptBlock {Stop-Service mssqlserver -force}
-    }
     if($RefreshType -eq "Sybase"){
         Invoke-Command -ComputerName $Computername -ScriptBlock {Stop-Service SQLANYs_TervisDatabase}
         Invoke-Command -ComputerName $Computername -ScriptBlock {Copy-Item 'D:\QcSoftware\Config','D:\QcSoftware\database.opts','D:\QcSoftware\profile.bat' 'C:\WCS Control' -Recurse -force}
     }
     foreach($target in $TargetDetails){
         $SanLocation = Get-EnvironmentRefreshLUNDetails -DatabaseName $($Target.Databasename)
-        $SnapshottoAttach = $snapshots | where { $_.snapname -like "*$Computername*" -and $_.snapname -like "*$($target.DatabaseName)*"} | select -last 1
+        $SnapshottoAttach = $snapshots | where { $_.snapname -like "*$Computername*" -and $_.snapname -like "*$($target.DatabaseName)*"} | Sort-Object -Property CreationTime | Select -last 1
+
+        if($RefreshType -eq "SQL"){
+            Invoke-DetachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName)            
+        }
 
         Write-Verbose "Setting Disk $($target.DiskNumber) Offline"
-        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -DriveLetter $($Target.DriveLetter) -State Offline
+#        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -DriveLetter $($Target.DriveLetter) -State Offline
+        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Offline
         Write-Verbose "Dismounting $($target.SMPID)"
         Dismount-VNXSnapshot -SMPID $($Target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
         
         Write-Verbose "Mounting $($SnapshottoAttach.SnapName)"
         Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
         Write-Verbose "Setting disk $($target.disknumber) online"
-        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -DriveLetter $($Target.DriveLetter) -State Online
-        write-host "Breakpoint"
-    }
-    if($RefreshType -eq "SQL"){
-        Write-Verbose "Starting SQL service"
-        Invoke-Command -ComputerName $Computername -ScriptBlock {Start-Service mssqlserver}
-        Write-Verbose "Starting SQL Agent"
-        Invoke-Command -ComputerName $Computername -ScriptBlock {start-service sqlserveragent}
-        
+        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Online
+
+        Invoke-Command -ComputerName $Computername -ScriptBlock { do { sleep 1} until (Test-Path $using:target.driveletter) }
+
+        if($RefreshType -eq "SQL"){
+            Invoke-AttachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName)            
+        }
+
     }
     if($RefreshType -eq "Sybase"){
         Invoke-Command -ComputerName $Computername -ScriptBlock {Copy-Item 'C:\WCS Control\config','C:\WCS Control\database.opts','C:\WCS Control\profile.bat' D:\QcSoftware -Recurse -force }
         Invoke-Command -ComputerName $Computername -ScriptBlock {Start-Service SQLANYs_TervisDatabase}
     }
+}
+
+function Invoke-DetachSQLDatabase {
+    param(
+        [Parameter(Mandatory)]$Computer,
+        [Parameter(Mandatory)]$Database
+    )
+    Invoke-SQL -dataSource $Computer -database $Database -sqlCommand "ALTER DATABASE $database SET OFFLINE WITH ROLLBACK IMMEDIATE; EXEC sp_detach_db '$database', 'true';"
+}
+
+function Invoke-AttachSQLDatabase {
+    param(
+        [Parameter(Mandatory)]$Computer,
+        [Parameter(Mandatory)]$Database
+    )
+    
+    $SQLTarget = Get-EnvironmentRefreshTargetDetails -Hostname $Computer | where databasename -match $Database
+
+    $SQLDBFiles = invoke-command -ComputerName $Computer -ScriptBlock {get-childitem -file -Path $($using:SQLTarget.driveletter) | where {$_.name -match "\..df$"}} 
+    $SQLDBFileParameter = ($SQLDBFiles | % {"( FILENAME = N'$($SQLTarget.DriveLetter)\$_' )"}) -join ","
+    Invoke-SQL -dataSource $Computer -database "master" -sqlCommand "CREATE DATABASE $($Database.toupper()) ON $SQLDBFileParameter FOR ATTACH"
 }
 
 function Set-EnvironmentRefreshDiskState{
@@ -72,12 +93,12 @@ function Set-EnvironmentRefreshDiskState{
         
         [Parameter(Mandatory)]$DiskNumber,
 
-        [Parameter(Mandatory)]$DriveLetter,
+#        [Parameter(Mandatory)]$DriveLetter,
 
         [ValidateSet("Online","Offline")]
         [Parameter(Mandatory)]$State
     )
-    
+#    Get-Partition -CimSession $cimsession -DriveLetter ((Get-Volume -CimSession $cimsession -FileSystemLabel "DB_MES").DriveLetter | select disknumber    
 #    $Session = New-PSSession -ComputerName $Computername
     if($state -eq "online"){
         $DiskOfflineCommandFile = @"
@@ -105,7 +126,7 @@ $($State) disk
 
 function New-EnvironmentRefreshSnapshot{
     param(
-        [ValidateSet(”DB_IMS”,“DB_MES”,"DB_ICMS","DB_Shipping","DB_RMSHQ_2017","P-WCSDATA","ALL")]
+        [ValidateSet(”DB_IMS”,“DB_MES”,"DB_ICMS","DB_Shipping","DB_Tervis_RMSHQ1","P-WCSDATA","ALL")]
         [String]$LUNName,
 
         [ValidateSet(”Delta”,“Epsilon”,"ALL")]
@@ -245,8 +266,8 @@ $EnvironmentRefreshLUNDetails = [pscustomobject][ordered]@{
 },
 [pscustomobject][ordered]@{
     Computername = "SQL"
-    LUNID = "1011"
-    LUNName = "DB_TervisRMSHQ1"
+    LUNID = "4"
+    LUNName = "DB_Tervis_RMSHQ1"
     Databasename = "Tervis_RMSHQ1"
     RefreshType = "DB"
     SANLocation = "VNX5300"
@@ -266,6 +287,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DatabaseName = "MES"
     VolumeName = "DB_MES"
     RefreshType = "DB"
+    DriveLetter = "G:"
     DiskNumber = "4"
     SMPID = "3960"
 },
@@ -275,6 +297,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DatabaseName = "IMS"
     VolumeName = "DB_IMS"
     RefreshType = "DB"
+    DriveLetter = "F:"
     DiskNumber = "3"
     SMPID = "3961"
 },
@@ -284,17 +307,9 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DatabaseName = "ICMS"
     VolumeName = "DB_ICMS"
     RefreshType = "DB"
+    DriveLetter = "K:"
     DiskNumber = "10"
     SMPID = "3913"
-},
-[pscustomobject][ordered]@{
-    Computername = "DLT-SQL"
-    EnvironmentName = "Delta"
-    DatabaseName = "Shipping"
-    VolumeName = "DB_Shipping"
-    RefreshType = "DB"
-    DiskNumber = "7"
-    SMPID = "3954"
 },
 [pscustomobject][ordered]@{
     Computername = "DLT-SQL"
@@ -302,8 +317,9 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DatabaseName = "Tervis_RMSHQ1"
     VolumeName = "Tervis_RMSHQ1"
     RefreshType = "DB"
-    DiskNumber = "6"
-    SMPID = "63836"
+    DriveLetter = "L:"
+    DiskNumber = "13"
+    SMPID = "3998"
 },
 [pscustomobject][ordered]@{
     Computername = "DLT-WCSSybase"
@@ -311,6 +327,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DatabaseName = "Tervis"
     VolumeName = "Data"
     RefreshType = "Disk"
+    DriveLetter = "D:"
     DiskNumber = "3"
     SMPID = "3957"
 },
@@ -321,7 +338,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "DB_MES"
     RefreshType = "DB"
     DiskNumber = "4"
-    DriveLetter = "I"
+    DriveLetter = "I:"
     VolumeNumber = "7"
     SMPID = "3997"
 },
@@ -332,7 +349,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "DB_IMS"
     RefreshType = "DB"
     DiskNumber = "5"
-    DriveLetter = "P"
+    DriveLetter = "P:"
     VolumeNumber = "8"
     SMPID = "3996"
 },
@@ -343,20 +360,9 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "DB_ICMS"
     RefreshType = "DB"
     DiskNumber = "10"
-    DriveLetter = "K"
+    DriveLetter = "K:"
     VolumeNumber = "12"
     SMPID = "3912"
-},
-[pscustomobject][ordered]@{
-    Computername = "EPS-SQL"
-    EnvironmentName = "Epsilon"
-    DatabaseName = "Shipping"
-    VolumeName = "DB_Shipping"
-    RefreshType = "DB"
-    DiskNumber = "8"
-    DriveLetter = "J"
-    VolumeNumber = "11"
-    SMPID = "3977"
 },
 [pscustomobject][ordered]@{
     Computername = "EPS-SQL"
@@ -364,10 +370,10 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DatabaseName = "Tervis_RMSHQ1"
     VolumeName = "DB_Tervis_RMSHQ1_VNX5300"
     RefreshType = "DB"
-    DiskNumber = "13"
-    DriveLetter = "F"
+    DiskNumber = "9"
+    DriveLetter = "E:"
     VolumeNumber = "13"
-    SMPID = "4068"
+    SMPID = "3999"
 },
 [pscustomobject][ordered]@{
     Computername = "EPS-WCSSybase"
@@ -377,7 +383,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     RefreshType = "Disk"
     DiskNumber = "3"
     DriveLetter = "D"
-    SMPID = "4000"
+    SMPID = "4004"
 }
 
 
