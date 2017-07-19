@@ -14,7 +14,7 @@ function Invoke-EnvironmentRefreshProcessForStores {
     $StoresRestoreScript = "//fs1/disasterrecovery/Source Controlled Items/Refresh Scripts/StoresRestore.ps1"
     foreach($Store in $StoreDetails){
         
-        Invoke-Sql -dataSource $($Store.Computername) -database $($Store.Databasename) -sqlCommand 'ALTER DATABASE [$($Store.Databasename)] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; GO; USE master; GO; DROP DATABASE $($Store.Databasename); GO;'
+        Invoke-Sql -dataSource $($Store.Computername) -database $($Store.Databasename) -sqlCommand "ALTER DATABASE [$($Store.Databasename)] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;USE master;DROP DATABASE $($Store.Databasename); GO;"
     }
     #Invoke-Command -ComputerName inf-dpm2016hq1 -FilePath $StoresRestoreScript
 }
