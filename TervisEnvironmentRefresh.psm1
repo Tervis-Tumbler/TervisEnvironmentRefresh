@@ -14,7 +14,7 @@ function Invoke-EnvironmentRefreshProcessForStores {
     $StoresRestoreScript = "//fs1/disasterrecovery/Source Controlled Items/Refresh Scripts/StoresRestore.ps1"
     foreach($Store in $StoreDetails){
         
-        Invoke-Sql -dataSource $($Store.Computername) -database $($Store.Databasename) -sqlCommand "ALTER DATABASE [$($Store.Databasename)] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;USE master;DROP DATABASE $($Store.Databasename); GO;"
+        Invoke-Sql -dataSource $($Store.Computername) -database $($Store.Databasename) -sqlCommand "ALTER DATABASE [$($Store.Databasename)] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;USE master;DROP DATABASE $($Store.Databasename);"
     }
     #Invoke-Command -ComputerName inf-dpm2016hq1 -FilePath $StoresRestoreScript
 }
@@ -288,7 +288,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "DB_MES"
     RefreshType = "DB"
     DriveLetter = "G:"
-    DiskNumber = "4"
+    DiskNumber = "5"
     SMPID = "3960"
 },
 [pscustomobject][ordered]@{
@@ -298,7 +298,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "DB_IMS"
     RefreshType = "DB"
     DriveLetter = "F:"
-    DiskNumber = "3"
+    DiskNumber = "4"
     SMPID = "3961"
 },
 [pscustomobject][ordered]@{
@@ -337,7 +337,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DatabaseName = "MES"
     VolumeName = "DB_MES"
     RefreshType = "DB"
-    DiskNumber = "4"
+    DiskNumber = "5"
     DriveLetter = "I:"
     VolumeNumber = "7"
     SMPID = "3997"
@@ -348,7 +348,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DatabaseName = "IMS"
     VolumeName = "DB_IMS"
     RefreshType = "DB"
-    DiskNumber = "5"
+    DiskNumber = "6"
     DriveLetter = "P:"
     VolumeNumber = "8"
     SMPID = "3996"
@@ -392,11 +392,11 @@ $EnvironmentRefreshStoreDetails = [pscustomobject][ordered]@{
     Databasename = "ospreystoredb"
     Environment = "Delta"
 },
-[pscustomobject][ordered]@{
-    Computername = "dlt-rmsbo2"
-    Databasename = "Orangebeachdb"
-    Environment = "Delta"
-},
+#[pscustomobject][ordered]@{
+#    Computername = "dlt-rmsbo2"
+#    Databasename = "Orangebeachdb"
+#    Environment = "Delta"
+#},
 [pscustomobject][ordered]@{
     Computername = "dlt-rmsbo3"
     Databasename = "Charleston"
