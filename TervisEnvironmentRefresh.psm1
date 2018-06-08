@@ -349,13 +349,13 @@ function New-OracleEnvironmentRefreshSnapshot{
     $RefreshLUNDetails = Get-OracleEnvironmentRefreshLUNDetails -DatabaseName $Databasename
     $EnvironmentrefreshSnapshotDetails = Get-OracleEnvironmentRefreshLUNDetails -DatabaseName $Databasename
     $MasterSnapshotName = (Get-TervisRefreshSnapshotNamePrefix -DatabaseName PRD -MasterSnapshot) + $Date
-    "New-VNXLUNSnapshot -LUNID $($EnvironmentrefreshSnapshotDetails.LUNID) -SnapshotName $MasterSnapshotName -TervisStorageArraySelection $($EnvironmentrefreshSnapshotDetails.SANLocation)"
+    New-VNXLUNSnapshot -LUNID $($EnvironmentrefreshSnapshotDetails.LUNID) -SnapshotName $MasterSnapshotName -TervisStorageArraySelection $($EnvironmentrefreshSnapshotDetails.SANLocation)
     
     ForEach ($Environment in $EnvironmentList) {
         $EnvironmentPrefix = get-TervisEnvironmentPrefix -EnvironmentName $Environment
         $LUNID = $EnvironmentrefreshSnapshotDetails.LUNID
         $SnapshotName = (Get-TervisRefreshSnapshotNamePrefix -Database PRD -EnvironmentName $Environment) + $Date
-        "Copy-VNXLUNSnapshot -SnapshotName $MasterSnapshotName -SnapshotCopyName $SnapshotName -TervisStorageArraySelection $($EnvironmentrefreshSnapshotDetails.SANLocation)"
+        Copy-VNXLUNSnapshot -SnapshotName $MasterSnapshotName -SnapshotCopyName $SnapshotName -TervisStorageArraySelection $($EnvironmentrefreshSnapshotDetails.SANLocation)
     }
     
 }
@@ -369,34 +369,16 @@ function Invoke-OracleEnvironmentRefreshProcess {
     $snapshots = Get-SnapshotsFromVNX -TervisStorageArraySelection ALL
     
     foreach($target in $TargetDetails){
-        $SanLocation = Get-OracleEnvironmentRefreshLUNDetails -DatabaseName $($Target.Databasename)
-        $SnapshottoAttach = $snapshots | where { $_.snapname -like "*$Computername*" -and $_.snapname -like "*$($target.DatabaseName)*"} | Sort-Object -Property CreationTime | Select -last 1
+        $LUNDetails = Get-OracleEnvironmentRefreshLUNDetails -DatabaseName $($Target.Databasename)
+        $SnapshotNamePrefix = Get-TervisRefreshSnapshotNamePrefix -DatabaseName $Target.DatabaseName -EnvironmentName $Target.Environmentname
+        $SnapshottoAttach = $snapshots | where { $_.snapname -match $SnapshotNamePrefix} | Sort-Object -Property CreationTime | Select -last 1
 
-        if($RefreshType -eq "SQL"){
-            Invoke-DetachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName)            
-        }
-
-        Write-Verbose "Setting Disk $($target.DiskNumber) Offline"
-#        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -DriveLetter $($Target.DriveLetter) -State Offline
-        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Offline
-        Write-Verbose "Dismounting $($target.SMPID)"
-        Dismount-VNXSnapshot -SMPID $($Target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
+        Write-Verbose "Dismounting snapshot for $($Target.Databasename) on $($Target.ComputerName) - SMP $($target.SMPID)"
+        Dismount-VNXSnapshot -SMPID $($Target.SMPID) -TervisStorageArraySelection $($LUNDetails.SANLocation)
         
-        Write-Verbose "Mounting $($SnapshottoAttach.SnapName)"
-        Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
-        Write-Verbose "Setting disk $($target.disknumber) online"
-        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Online
+        Write-Verbose "Mounting snapshot $($SnapshottoAttach.SnapName) on $($Target.Computername) - SMPID $($Target.SMPID)"
+        Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID) -TervisStorageArraySelection $($LUNDetails.SANLocation)
 
-        Invoke-Command -ComputerName $Computername -ScriptBlock { do { sleep 1} until (Test-Path $using:target.driveletter) }
-
-        if($RefreshType -eq "SQL"){
-            Invoke-AttachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName)            
-        }
-
-    }
-    if($RefreshType -eq "Sybase"){
-        Invoke-Command -ComputerName $Computername -ScriptBlock {Copy-Item 'C:\WCS Control\config','C:\WCS Control\database.opts','C:\WCS Control\profile.bat' D:\QcSoftware -Recurse -force }
-        Invoke-Command -ComputerName $Computername -ScriptBlock {Start-Service SQLANYs_TervisDatabase}
     }
 }
 
