@@ -1,4 +1,7 @@
 ﻿#Requires -Modules TervisEnvironment,TervisStorage
+$ModulePath = (Get-Module -ListAvailable TervisEnvironmentRefresh).ModuleBase
+. $ModulePath\RefreshDefinitions.ps1
+
 
 function Invoke-EnvironmentRefreshProcessForStores {
     param(
