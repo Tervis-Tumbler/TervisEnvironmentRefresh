@@ -38,6 +38,7 @@ function Invoke-EnvironmentRefreshProcess {
         Invoke-Command -ComputerName $Computername -ScriptBlock {Copy-Item 'D:\QcSoftware\Config','D:\QcSoftware\database.opts','D:\QcSoftware\profile.bat' 'C:\WCS Control' -Recurse -force}
     }
     foreach($target in $TargetDetails){
+        Write-Verbose "Current Database - $($Target.DatabaseName)"
         $SanLocation = Get-EnvironmentRefreshLUNDetails -DatabaseName $($Target.Databasename)
         $SnapshottoAttach = $snapshots | where { $_.snapname -like "*$Computername*" -and $_.snapname -like "*$($target.DatabaseName)*"} | Sort-Object -Property CreationTime | Select -last 1
 
@@ -209,6 +210,29 @@ function Get-EnvironmentRefreshLUNDetails{
     }
 }
 
+function Get-OracleEnvironmentRefreshLUNDetails{
+    param(
+        [Parameter(Mandatory, ParameterSetName = "DetailsbyLUNNAME")]
+        [String]$LUNName,
+    
+        [Parameter(Mandatory, ParameterSetName = "DetailsbyDBName")]
+        [string]$DatabaseName,
+    
+        [Parameter(Mandatory, ParameterSetName = "ListOnly")]
+        [switch]$List
+    )
+    
+    If ($List){
+        $OracleEnvironmentRefreshLUNDetails
+    }
+    elseif($LUNName){
+        $OracleEnvironmentRefreshLUNDetails | Where LUNName -EQ $LUNName
+    }
+    else{
+        $OracleEnvironmentRefreshLUNDetails | Where DatabaseName -EQ $DatabaseName
+    }
+}
+
 function Get-EnvironmentRefreshTargetDetails{
     param(
         [Parameter(mandatory, ParameterSetName = "DetailsbyDBName")]
@@ -235,6 +259,30 @@ function Get-EnvironmentRefreshTargetDetails{
     }
 }
 
+function Get-OracleEnvironmentRefreshTargetDetails{
+    param(
+        [Parameter(mandatory, ParameterSetName = "DetailsbyDBName")]
+        $Databasename,
+
+        [Parameter(mandatory, ParameterSetName = "DetailsbyDBName")]
+        [ValidateSet(”Delta”,“Epsilon”)]
+        $EnvironmentName,
+
+        [Parameter(mandatory, ParameterSetName = "DetailsbyHostname")]
+        $Hostname,
+
+        [Parameter(Mandatory, ParameterSetName = "ListOnly")]
+        [switch]$List
+    )
+    If ($List){
+        $OracleEnvironmentRefreshTargetDetails
+    }
+    Elseif ($Hostname){
+        $OracleEnvironmentRefreshTargetDetails | where Computername -eq $Hostname
+    }
+    else{
+        $OracleEnvironmentRefreshTargetDetails | Where {$_.Databasename -EQ $Databasename -and $_.Environmentname -eq $EnvironmentName}
+    }
 }
 
 
