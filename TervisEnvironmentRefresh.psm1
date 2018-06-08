@@ -330,6 +330,8 @@ function Invoke-EnvironmentRefreshProcessForOracle {
     }
 }
 
+
+
 function New-OracleEnvironmentRefreshSnapshot{
     param(
         [ValidateSet("PRD")]
@@ -338,19 +340,22 @@ function New-OracleEnvironmentRefreshSnapshot{
         [ValidateSet("Zeta",”Delta”,“Epsilon”,"ALL")]
         [String]$EnvironmentName
     )
-    $DATE = (get-date).tostring("yyyyMMdd")
+    $Date = (get-date).tostring("yyyyMMdd-HH:mm:ss")
+    #$DATE = (get-date).tostring("yyyyMMdd")
     if($EnvironmentName -eq "ALL"){
         $EnvironmentList = "Zeta","Delta","Epsilon"
     }
     else{$EnvironmentList = $EnvironmentName}
     $RefreshLUNDetails = Get-OracleEnvironmentRefreshLUNDetails -DatabaseName $Databasename
     $EnvironmentrefreshSnapshotDetails = Get-OracleEnvironmentRefreshLUNDetails -DatabaseName $Databasename
+    $MasterSnapshotName = (Get-TervisRefreshSnapshotNamePrefix -DatabaseName PRD -MasterSnapshot) + $Date
+    "New-VNXLUNSnapshot -LUNID $($EnvironmentrefreshSnapshotDetails.LUNID) -SnapshotName $MasterSnapshotName -TervisStorageArraySelection $($EnvironmentrefreshSnapshotDetails.SANLocation)"
+    
     ForEach ($Environment in $EnvironmentList) {
         $EnvironmentPrefix = get-TervisEnvironmentPrefix -EnvironmentName $Environment
         $LUNID = $EnvironmentrefreshSnapshotDetails.LUNID
-        $SnapshotName = (Get-TervisRefreshSnapshotNamePrefix -Database PRD -EnvironmentName Zeta) + $Date
-        $SnapshotName
-        #New-VNXLUNSnapshot -LUNID $LUNID -SnapshotName $SnapshotName -TervisStorageArraySelection $($EnvironmentrefreshSnapshotDetails.SANLocation)
+        $SnapshotName = (Get-TervisRefreshSnapshotNamePrefix -Database PRD -EnvironmentName $Environment) + $Date
+        "Copy-VNXLUNSnapshot -SnapshotName $MasterSnapshotName -SnapshotCopyName $SnapshotName -TervisStorageArraySelection $($EnvironmentrefreshSnapshotDetails.SANLocation)"
     }
     
 }
@@ -396,11 +401,24 @@ function Invoke-OracleEnvironmentRefreshProcess {
 }
 
 function Get-TervisRefreshSnapshotNamePrefix{
+    [CmdletBinding()]
     param(
-        [parameter(mandatory)]$DatabaseName,
-        [parameter(mandatory)]$EnvironmentName
+        [parameter(mandatory,ParameterSetName = "ByEnvironment")]
+        [parameter(mandatory,ParameterSetName = "MasterSnapshot")]
+        $DatabaseName,
+
+        [parameter(mandatory,ParameterSetName = "ByEnvironment")]
+        $EnvironmentName,
+
+        [parameter(mandatory,ParameterSetName = "MasterSnapshot")]
+        [switch]$MasterSnapshot
     )
-    $EnvironmentPrefix = Get-TervisEnvironmentPrefix -EnvironmentName $EnvironmentName
-    $SnapshotName = ("DB-" + $DatabaseName + "_" + $EnvironmentPrefix + "_").toupper()
+    if($MasterSnapshot){
+        $SnapshotName = ("DB-" + $DatabaseName + "_Master" + "_" ).toupper()
+    }
+    else{
+        $EnvironmentPrefix = Get-TervisEnvironmentPrefix -EnvironmentName $EnvironmentName
+        $SnapshotName = ("DB-" + $DatabaseName + "_" + $EnvironmentPrefix + "_").toupper()
+    }
     $SnapshotName
 }
