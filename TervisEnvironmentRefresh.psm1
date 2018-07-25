@@ -285,59 +285,12 @@ function Get-OracleEnvironmentRefreshTargetDetails{
     }
 }
 
-
-function Invoke-EnvironmentRefreshProcessForOracle {
-    param(
-        [Parameter(Mandatory)]$Computername
-    )
-    $TargetDetails = Get-OracleEnvironmentRefreshTargetDetails -Hostname $Computername
-    Write-Verbose "Retrieving Snapshots"
-    $snapshots = Get-SnapshotsFromVNX -TervisStorageArraySelection ALL
-    
-    if($RefreshType -eq "Sybase"){
-        Invoke-Command -ComputerName $Computername -ScriptBlock {Stop-Service SQLANYs_TervisDatabase}
-    }
-    foreach($target in $TargetDetails){
-        Write-Verbose "Current Database - $($Target.DatabaseName)"
-        $SanLocation = Get-EnvironmentRefreshLUNDetails -DatabaseName $($Target.Databasename)
-        $SnapshottoAttach = $snapshots | where { $_.snapname -like "*$Computername*" -and $_.snapname -like "*$($target.DatabaseName)*"} | Sort-Object -Property CreationTime | Select -last 1
-
-        if($RefreshType -eq "SQL"){
-            Invoke-DetachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName)            
-        }
-
-        Write-Verbose "Setting Disk $($target.DiskNumber) Offline"
-#        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -DriveLetter $($Target.DriveLetter) -State Offline
-        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Offline
-        Write-Verbose "Dismounting $($target.SMPID)"
-        Dismount-VNXSnapshot -SMPID $($Target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
-        
-        Write-Verbose "Mounting $($SnapshottoAttach.SnapName)"
-        Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
-        Write-Verbose "Setting disk $($target.disknumber) online"
-        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Online
-
-        Invoke-Command -ComputerName $Computername -ScriptBlock { do { sleep 1} until (Test-Path $using:target.driveletter) }
-
-        if($RefreshType -eq "SQL"){
-            Invoke-AttachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName)            
-        }
-
-    }
-    if($RefreshType -eq "Sybase"){
-        Invoke-Command -ComputerName $Computername -ScriptBlock {Copy-Item 'C:\WCS Control\config','C:\WCS Control\database.opts','C:\WCS Control\profile.bat' D:\QcSoftware -Recurse -force }
-        Invoke-Command -ComputerName $Computername -ScriptBlock {Start-Service SQLANYs_TervisDatabase}
-    }
-}
-
-
-
 function New-OracleEnvironmentRefreshSnapshot{
     param(
         [ValidateSet("PRD")]
         [String]$DatabaseName,
 
-        [ValidateSet("Zeta",”Delta”,“Epsilon”,"ALL")]
+        [ValidateSet("Zeta","Delta","Epsilon","ALL")]
         [String]$EnvironmentName
     )
     $Date = (get-date).tostring("yyyyMMdd-HH:mm:ss")
@@ -364,22 +317,32 @@ function Invoke-OracleEnvironmentRefreshProcess {
     param(
         [Parameter(Mandatory)]$Computername
     )
+    $Credential = Find-PasswordstatePassword -HostName $Computername -UserName "Root" -AsCredential
+    $SSHSession = New-SSHSession -ComputerName $Computername -Credential $Credential
     $TargetDetails = Get-OracleEnvironmentRefreshTargetDetails -Hostname $Computername
     Write-Verbose "Retrieving Snapshots"
-    $snapshots = Get-SnapshotsFromVNX -TervisStorageArraySelection ALL
-    
+    $snapshots = Get-SnapshotsFromVNX -TervisStorageArraySelection VNX5200
+
+    $SSHCommand = "umount /ebsdata; umount /ebsdata2"
+    Invoke-SSHCommand -SSHSession $SSHSession -Command $SSHCommand
+
     foreach($target in $TargetDetails){
         $LUNDetails = Get-OracleEnvironmentRefreshLUNDetails -DatabaseName $($Target.Databasename)
         $SnapshotNamePrefix = Get-TervisRefreshSnapshotNamePrefix -DatabaseName $Target.DatabaseName -EnvironmentName $Target.Environmentname
         $SnapshottoAttach = $snapshots | where { $_.snapname -match $SnapshotNamePrefix} | Sort-Object -Property CreationTime | Select -last 1
 
         Write-Verbose "Dismounting snapshot for $($Target.Databasename) on $($Target.ComputerName) - SMP $($target.SMPID)"
-        Dismount-VNXSnapshot -SMPID $($Target.SMPID) -TervisStorageArraySelection $($LUNDetails.SANLocation)
+        foreach($SMP in $target.SMPID){
+            Dismount-VNXSnapshot -SMPID $SMP -TervisStorageArraySelection $($LUNDetails.SANLocation)
+            Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $SMP -TervisStorageArraySelection $($LUNDetails.SANLocation)
+        }
         
-        Write-Verbose "Mounting snapshot $($SnapshottoAttach.SnapName) on $($Target.Computername) - SMPID $($Target.SMPID)"
-        Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID) -TervisStorageArraySelection $($LUNDetails.SANLocation)
-
     }
+    Invoke-SSHCommand -SSHSession $SSHSession -command "iscsiadm -m node --refresh"
+    Invoke-SSHCommand -SSHSession $SSHSession -command "systemctl reload multipathd"
+    Invoke-SSHCommand -SSHSession $SSHSession -command "vgscan"
+    Invoke-SSHCommand -SSHSession $SSHSession -command "vgchange -ay"
+    Invoke-SSHCommand -SSHSession $SSHSession -command "mount -a"
 }
 
 function Get-TervisRefreshSnapshotNamePrefix{

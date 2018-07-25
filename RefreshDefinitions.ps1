@@ -195,7 +195,21 @@ $EnvironmentRefreshStoreDetails = [pscustomobject][ordered]@{
 }
 
 $OracleEnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
+    Computername = "ZET-ODBEE01"
+    EnvironmentName = "Zeta"
+    DatabaseName = "PRD"
+    RefreshType = "ODBEE"
+    SMPID = "63832","63833"
+},
+[pscustomobject][ordered]@{
     Computername = "DLT-ODBEE01"
+    EnvironmentName = "Delta"
+    DatabaseName = "PRD"
+    RefreshType = "ODBEE"
+    SMPID = "3960"
+},
+[pscustomobject][ordered]@{
+    Computername = "EPS-ODBEE01"
     EnvironmentName = "Delta"
     DatabaseName = "PRD"
     RefreshType = "ODBEE"
