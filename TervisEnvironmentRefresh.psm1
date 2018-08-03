@@ -302,7 +302,26 @@ function New-OracleEnvironmentRefreshSnapshot{
     $RefreshLUNDetails = Get-OracleEnvironmentRefreshLUNDetails -DatabaseName $Databasename
     $EnvironmentrefreshSnapshotDetails = Get-OracleEnvironmentRefreshLUNDetails -DatabaseName $Databasename
     $MasterSnapshotName = (Get-TervisRefreshSnapshotNamePrefix -DatabaseName PRD -MasterSnapshot) + $Date
+
+    $TimeSpan = New-TimeSpan -Minutes 5
+    New-SSHSession -ComputerName ebsdb-prd
+    $SSHShellStream = New-SSHShellStream -SSHSession (get-sshsession)
+    $SSHShellStream.WriteLine("hostname")
+    $SSHShellStream.Read()
+    $SSHShellStream.WriteLine("su - oracle")
+    $SSHShellStream.WriteLine("prd")
+    $SSHShellStream.Expect("prd:PRD",$TimeSpan)
+    #Invoke-SSHStreamExpectAction -ShellStream $SSHShellStream -ExpectString "prd:PRD" -TimeOut 300 -Command "/u01/app/oracle/DBA/scripts/snap_db_backup_mode.sh begin" -Action "sync" -Verbose
+    $SSHShellStream.WriteLine("/u01/app/oracle/DBA/scripts/snap_db_backup_mode.sh begin")
+    $SSHShellStream.Expect("prd:PRD",$TimeSpan)
+    $SSHShellStream.WriteLine("sync")$SSHShellStream.WriteLine("sync")
+    $SSHShellStream.Expect("prd:PRD",$TimeSpan)
+    
+    
     New-VNXLUNSnapshot -LUNID $($EnvironmentrefreshSnapshotDetails.LUNID) -SnapshotName $MasterSnapshotName -TervisStorageArraySelection $($EnvironmentrefreshSnapshotDetails.SANLocation)
+    
+    $SSHShellStream.WriteLine("/u01/app/oracle/DBA/scripts/snap_db_backup_mode.sh end")
+    $SSHShellStream.Expect("prd:PRD",$TimeSpan)
     
     ForEach ($Environment in $EnvironmentList) {
         $EnvironmentPrefix = get-TervisEnvironmentPrefix -EnvironmentName $Environment
@@ -339,10 +358,13 @@ function Invoke-OracleEnvironmentRefreshProcess {
         
     }
     Invoke-SSHCommand -SSHSession $SSHSession -command "iscsiadm -m node --refresh"
+    sleep 2
     Invoke-SSHCommand -SSHSession $SSHSession -command "systemctl reload multipathd"
     Invoke-SSHCommand -SSHSession $SSHSession -command "vgscan"
     Invoke-SSHCommand -SSHSession $SSHSession -command "vgchange -ay"
     Invoke-SSHCommand -SSHSession $SSHSession -command "mount -a"
+    Invoke-SSHCommand -SSHSession $SSHSession -Command "chmod oracle.dba ebsdata*"
+    get-sshsession | Remove-SSHSession
 }
 
 function Get-TervisRefreshSnapshotNamePrefix{
@@ -367,3 +389,4 @@ function Get-TervisRefreshSnapshotNamePrefix{
     }
     $SnapshotName
 }
+
