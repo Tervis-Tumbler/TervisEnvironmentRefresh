@@ -308,13 +308,13 @@ function New-OracleEnvironmentRefreshSnapshot{
     $SSHShellStream = New-SSHShellStream -SSHSession (get-sshsession)
     $SSHShellStream.WriteLine("hostname")
     $SSHShellStream.Read()
-    $SSHShellStream.WriteLine("su - oracle")
     $SSHShellStream.WriteLine("prd")
     $SSHShellStream.Expect("prd:PRD",$TimeSpan)
     #Invoke-SSHStreamExpectAction -ShellStream $SSHShellStream -ExpectString "prd:PRD" -TimeOut 300 -Command "/u01/app/oracle/DBA/scripts/snap_db_backup_mode.sh begin" -Action "sync" -Verbose
     $SSHShellStream.WriteLine("/u01/app/oracle/DBA/scripts/snap_db_backup_mode.sh begin")
     $SSHShellStream.Expect("prd:PRD",$TimeSpan)
-    $SSHShellStream.WriteLine("sync")$SSHShellStream.WriteLine("sync")
+    $SSHShellStream.WriteLine("sync")
+    $SSHShellStream.WriteLine("sync")
     $SSHShellStream.Expect("prd:PRD",$TimeSpan)
     
     
@@ -363,7 +363,6 @@ function Invoke-OracleEnvironmentRefreshProcess {
     Invoke-SSHCommand -SSHSession $SSHSession -command "vgscan"
     Invoke-SSHCommand -SSHSession $SSHSession -command "vgchange -ay"
     Invoke-SSHCommand -SSHSession $SSHSession -command "mount -a"
-    Invoke-SSHCommand -SSHSession $SSHSession -Command "chmod oracle.dba ebsdata*"
     get-sshsession | Remove-SSHSession
 }
 
