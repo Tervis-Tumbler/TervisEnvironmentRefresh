@@ -299,24 +299,23 @@ function New-OracleEnvironmentRefreshSnapshot{
         $EnvironmentList = "Zeta","Delta","Epsilon"
     }
     else{$EnvironmentList = $EnvironmentName}
-    $RefreshLUNDetails = Get-OracleEnvironmentRefreshLUNDetails -DatabaseName $Databasename
+#    $RefreshLUNDetails = Get-OracleEnvironmentRefreshLUNDetails -DatabaseName $Databasename
     $EnvironmentrefreshSnapshotDetails = Get-OracleEnvironmentRefreshLUNDetails -DatabaseName $Databasename
     $MasterSnapshotName = (Get-TervisRefreshSnapshotNamePrefix -DatabaseName PRD -MasterSnapshot) + $Date
 
     $TimeSpan = New-TimeSpan -Minutes 5
-    New-SSHSession -ComputerName ebsdb-prd
+    $Credential = Get-PasswordstatePassword -ID 4782 -AsCredential
+    New-SSHSession -ComputerName $EnvironmentrefreshSnapshotDetails.Computername -Credential $Credential -AcceptKey
     $SSHShellStream = New-SSHShellStream -SSHSession (get-sshsession)
-    $SSHShellStream.WriteLine("hostname")
-    $SSHShellStream.Read()
+#    $SSHShellStream.WriteLine("hostname")
+#    $SSHShellStream.Read()
     $SSHShellStream.WriteLine("prd")
     $SSHShellStream.Expect("prd:PRD",$TimeSpan)
     #Invoke-SSHStreamExpectAction -ShellStream $SSHShellStream -ExpectString "prd:PRD" -TimeOut 300 -Command "/u01/app/oracle/DBA/scripts/snap_db_backup_mode.sh begin" -Action "sync" -Verbose
     $SSHShellStream.WriteLine("/u01/app/oracle/DBA/scripts/snap_db_backup_mode.sh begin")
     $SSHShellStream.Expect("prd:PRD",$TimeSpan)
     $SSHShellStream.WriteLine("sync")
-    $SSHShellStream.WriteLine("sync")
     $SSHShellStream.Expect("prd:PRD",$TimeSpan)
-    
     
     New-VNXLUNSnapshot -LUNID $($EnvironmentrefreshSnapshotDetails.LUNID) -SnapshotName $MasterSnapshotName -TervisStorageArraySelection $($EnvironmentrefreshSnapshotDetails.SANLocation)
     
@@ -324,8 +323,8 @@ function New-OracleEnvironmentRefreshSnapshot{
     $SSHShellStream.Expect("prd:PRD",$TimeSpan)
     
     ForEach ($Environment in $EnvironmentList) {
-        $EnvironmentPrefix = get-TervisEnvironmentPrefix -EnvironmentName $Environment
-        $LUNID = $EnvironmentrefreshSnapshotDetails.LUNID
+#        $EnvironmentPrefix = get-TervisEnvironmentPrefix -EnvironmentName $Environment
+#        $LUNID = $EnvironmentrefreshSnapshotDetails.LUNID
         $SnapshotName = (Get-TervisRefreshSnapshotNamePrefix -Database PRD -EnvironmentName $Environment) + $Date
         Copy-VNXLUNSnapshot -SnapshotName $MasterSnapshotName -SnapshotCopyName $SnapshotName -TervisStorageArraySelection $($EnvironmentrefreshSnapshotDetails.SANLocation)
     }
@@ -337,7 +336,7 @@ function Invoke-OracleEnvironmentRefreshProcess {
         [Parameter(Mandatory)]$Computername
     )
     $Credential = Find-PasswordstatePassword -HostName $Computername -UserName "Root" -AsCredential
-    $SSHSession = New-SSHSession -ComputerName $Computername -Credential $Credential
+    $SSHSession = New-SSHSession -ComputerName $Computername -Credential $Credential -AcceptKey
     $TargetDetails = Get-OracleEnvironmentRefreshTargetDetails -Hostname $Computername
     Write-Verbose "Retrieving Snapshots"
     $snapshots = Get-SnapshotsFromVNX -TervisStorageArraySelection VNX5200
