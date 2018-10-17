@@ -388,3 +388,70 @@ function Get-TervisRefreshSnapshotNamePrefix{
     $SnapshotName
 }
 
+
+function Stop-OracleApplicationTier{
+    [CmdletBinding()]
+    param(
+        [parameter(mandatory)][ValidateSet("zet-ias01")]$Computername
+    )
+    $ShutdownScriptPath = "/patches/cloning/scripts/shutdown_appstier.sh SBX"
+    $ExpectString = '[applmgr@zet-ias01 ~]$'
+    $Credential = Find-PasswordstatePassword -HostName ($Computername + ".tervis.prv") -UserName "applmgr" -AsCredential
+    $SSHSession = New-SSHSession -HostName $Computername -Credential $Credential -AcceptKey
+    $TimeSpan = New-TimeSpan -Minutes 5
+    $SSHShellStream = New-SSHShellStream -SSHSession $SshSession
+    $SSHShellStream.WriteLine($ShutdownScriptPath)
+    
+    if (-not $SSHShellStream.Expect($ExpectString,$TimeSpan)){
+        Write-Error -Message "Command Timed Out" -Category LimitsExceeded -ErrorAction Stop
+    }    
+    $DebugOutput = $SSHShellStream.Read()
+    Write-Debug $DebugOutput
+    Get-SSHSession | Remove-SSHSession
+}
+
+function Stop-OracleDatabaseTier{
+    [CmdletBinding()]
+    param(
+        [parameter(mandatory)][ValidateSet("zet-odbee01")]$Computername
+    )
+    $ShutdownScriptPath = "/patches/cloning/scripts/shutdown_dbtier.sh SBX"
+    $ExpectString = '[oracle@zet-odbee01 ~]$'
+    $Credential = Find-PasswordstatePassword -HostName ($Computername + ".tervis.prv") -UserName "Oracle" -AsCredential
+    $SSHSession = New-SSHSession -HostName $Computername -Credential $Credential
+    $TimeSpan = New-TimeSpan -Minutes 5
+    $SSHShellStream = New-SSHShellStream -SSHSession $SshSession
+    $SSHShellStream.WriteLine($ShutdownScriptPath)
+    
+    if (-not $SSHShellStream.Expect($ExpectString,$TimeSpan)){
+        Write-Error -Message "Command Timed Out" -Category LimitsExceeded -ErrorAction Stop
+    }    
+    $DebugOutput = $SSHShellStream.Read()
+    Write-Debug $DebugOutput
+    Get-SSHSession | Remove-SSHSession
+}
+
+function Invoke-ScheduledZetaOracleRefresh{
+    Stop-OracleApplicationTier -Computername zet-ias01 -Verbose
+    Stop-OracleDatabaseTier -Computername zet-odbee01 -Verbose
+    New-OracleEnvironmentRefreshSnapshot -DatabaseName PRD -EnvironmentName Zeta
+    Invoke-OracleEnvironmentRefreshProcess -Computername zet-ias01
+}
+
+function Install-OracleZetaScheduledEnvironmentRefreshPowershellApplication {
+	param (
+		$ComputerName
+	)
+    $ScheduledTaskCredential = New-Object System.Management.Automation.PSCredential (Get-PasswordstatePassword -AsCredential -ID 259)
+    Install-PowerShellApplication -ComputerName $ComputerName `
+        -EnvironmentName "Infrastructure" `
+        -ModuleName "TervisEnvironmentRefresh" `
+        -TervisModuleDependencies PasswordstatePowershell,TervisMicrosoft.PowerShell.Utility,TervisMailMessage,microsoft.powershell.Management,PasswordstatePowershell,TervisEnvironment,TervisEnvironmentRefresh,tervismicrosoft.powershell.Utility,TervisStorage `
+        -PowerShellGalleryDependencies "Posh-SSH" `
+        -ScheduledTasksCredential $ScheduledTaskCredential `
+        -ScheduledTaskName "OracleZetaScheduledEnvironmentRefresh" `
+        -RepetitionIntervalName "OnceAWeekFridayMorning" `
+        -CommandString @"
+    Invoke-ScheduledZetaOracleRefresh
+"@
+}
