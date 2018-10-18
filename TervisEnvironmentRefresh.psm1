@@ -432,10 +432,28 @@ function Stop-OracleDatabaseTier{
 }
 
 function Invoke-ScheduledZetaOracleRefresh{
+    try{
     Stop-OracleApplicationTier -Computername zet-ias01 -Verbose
     Stop-OracleDatabaseTier -Computername zet-odbee01 -Verbose
     New-OracleEnvironmentRefreshSnapshot -DatabaseName PRD -EnvironmentName Zeta
     Invoke-OracleEnvironmentRefreshProcess -Computername zet-ias01
+    }
+    catch{
+        get-sshsession | remove-sshsession | Out-Null
+        $Body = @"
+        <html><body>
+        <h2>$($_.InvocationInfo.MyCommand.Name)</h2>
+            <p>$($_.exception.message)</p>
+    
+            <p>$($_.InvocationInfo.PositionMessage)</p>
+
+        </body></html>
+"@
+        $FromAddress = "Mailerdaemon@tervis.com"
+        $ToAddress = "dmohlmaster@tervis.com"
+        $Subject = "***ACTION REQUIRED*** Zeta Scheduled Refresh Failed - $($_.InvocationInfo.MyCommand.Name)"
+        Send-TervisMailMessage -From $FromAddress -To $ToAddress -Subject $Subject -Body $Body -BodyAsHTML
+    }
 }
 
 function Install-OracleZetaScheduledEnvironmentRefreshPowershellApplication {
