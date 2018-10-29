@@ -335,7 +335,7 @@ function Invoke-OracleEnvironmentRefreshProcess {
     param(
         [Parameter(Mandatory)]$Computername
     )
-    $Credential = Find-PasswordstatePassword -HostName $Computername -UserName "Root" -AsCredential
+    $Credential = Find-PasswordstatePassword -HostName ($Computername + ".tervis.prv") -UserName "Root" -AsCredential
     $SSHSession = New-SSHSession -ComputerName $Computername -Credential $Credential -AcceptKey
     $TargetDetails = Get-OracleEnvironmentRefreshTargetDetails -Hostname $Computername
     Write-Verbose "Retrieving Snapshots"
@@ -400,6 +400,7 @@ function Stop-OracleApplicationTier{
     $SSHSession = New-SSHSession -HostName $Computername -Credential $Credential -AcceptKey
     $TimeSpan = New-TimeSpan -Minutes 5
     $SSHShellStream = New-SSHShellStream -SSHSession $SshSession
+    $SSHShellStream.read() | Out-Null
     $SSHShellStream.WriteLine($ShutdownScriptPath)
     
     if (-not $SSHShellStream.Expect($ExpectString,$TimeSpan)){
@@ -421,6 +422,7 @@ function Stop-OracleDatabaseTier{
     $SSHSession = New-SSHSession -HostName $Computername -Credential $Credential
     $TimeSpan = New-TimeSpan -Minutes 5
     $SSHShellStream = New-SSHShellStream -SSHSession $SshSession
+    $SSHShellStream.read() | Out-Null
     $SSHShellStream.WriteLine($ShutdownScriptPath)
     
     if (-not $SSHShellStream.Expect($ExpectString,$TimeSpan)){

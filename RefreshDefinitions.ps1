@@ -64,7 +64,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "DB_MES"
     RefreshType = "DB"
     DriveLetter = "G:"
-    DiskNumber = "2"
+    DiskNumber = "4"
     SMPID = "3960"
 },
 [pscustomobject][ordered]@{
@@ -84,7 +84,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "DB_ICMS"
     RefreshType = "DB"
     DriveLetter = "K:"
-    DiskNumber = "8"
+    DiskNumber = "9"
     SMPID = "3913"
 },
 [pscustomobject][ordered]@{
@@ -94,7 +94,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "Tervis_RMSHQ1"
     RefreshType = "DB"
     DriveLetter = "M:"
-    DiskNumber = "11"
+    DiskNumber = "12"
     SMPID = "3998"
 },
 [pscustomobject][ordered]@{
