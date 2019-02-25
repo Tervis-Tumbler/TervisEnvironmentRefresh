@@ -65,6 +65,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     RefreshType = "DB"
     DriveLetter = "G:"
     DiskNumber = "4"
+    FileSystemLabel = "DB_MES"
     SMPID = "3960"
 },
 [pscustomobject][ordered]@{
@@ -75,6 +76,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     RefreshType = "DB"
     DriveLetter = "F:"
     DiskNumber = "3"
+    FileSystemLabel = "DB_IMS"
     SMPID = "3961"
 },
 [pscustomobject][ordered]@{
@@ -85,6 +87,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     RefreshType = "DB"
     DriveLetter = "K:"
     DiskNumber = "9"
+    FileSystemLabel = "DB_ICMS"
     SMPID = "3913"
 },
 [pscustomobject][ordered]@{
@@ -95,6 +98,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     RefreshType = "DB"
     DriveLetter = "M:"
     DiskNumber = "12"
+    FileSystemLabel = "DB_TervisRMSHQ1_2"
     SMPID = "3998"
 },
 [pscustomobject][ordered]@{
@@ -116,6 +120,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DiskNumber = "4"
     DriveLetter = "I:"
     VolumeNumber = "7"
+    FileSystemLabel = "DB_MES"
     SMPID = "3997"
 },
 [pscustomobject][ordered]@{
@@ -127,6 +132,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DiskNumber = "5"
     DriveLetter = "P:"
     VolumeNumber = "8"
+    FileSystemLabel = "DB_IMS"
     SMPID = "3996"
 },
 [pscustomobject][ordered]@{
@@ -138,6 +144,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DiskNumber = "9"
     DriveLetter = "K:"
     VolumeNumber = "12"
+    FileSystemLabel = "DB_ICMS"
     SMPID = "3912"
 },
 [pscustomobject][ordered]@{
@@ -149,6 +156,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DiskNumber = "12"
     DriveLetter = "E:"
     VolumeNumber = "13"
+    FileSystemLabel = "DB_TervisRMSHQ1_2"
     SMPID = "3999"
 },
 [pscustomobject][ordered]@{
@@ -206,12 +214,12 @@ $OracleEnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     EnvironmentName = "Delta"
     DatabaseName = "PRD"
     RefreshType = "ODBEE"
-    SMPID = "3960"
+    SMPID = "63845","63843"
 },
 [pscustomobject][ordered]@{
     Computername = "EPS-ODBEE01"
     EnvironmentName = "Delta"
     DatabaseName = "PRD"
     RefreshType = "ODBEE"
-    SMPID = "3960"
+    SMPID = "63844","63842"
 }

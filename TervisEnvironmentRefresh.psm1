@@ -45,22 +45,31 @@ function Invoke-EnvironmentRefreshProcess {
         if($RefreshType -eq "SQL"){
             Invoke-DetachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName)            
         }
-
-        Write-Verbose "Setting Disk $($target.DiskNumber) Offline"
-#        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -DriveLetter $($Target.DriveLetter) -State Offline
-        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Offline
+        $Volume = Invoke-Command -ComputerName $target.Computername -ScriptBlock {Get-Volume -FileSystemLabel $using:Target.FilesystemLabel}
+        $Partition = Invoke-Command -ComputerName $target.Computername -ScriptBlock {Get-Partition | Where-Object Driveletter -eq $using:Volume.DriveLetter}
+        Write-Verbose "Setting Disk $($Partition.DiskNumber) - $($Volume.DriveLetter) - $($Volume.FileSystemLabel) Offline"
+        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($Partition.DiskNumber) -State Offline
         Write-Verbose "Dismounting $($target.SMPID)"
         Dismount-VNXSnapshot -SMPID $($Target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
         
         Write-Verbose "Mounting $($SnapshottoAttach.SnapName)"
         Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
-        Write-Verbose "Setting disk $($target.disknumber) online"
-        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Online
-
-        Invoke-Command -ComputerName $Computername -ScriptBlock { do { sleep 1} until (Test-Path $using:target.driveletter) }
+        Write-Verbose "Setting disk $($Partition.DiskNumber) online"
+        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($Partition.DiskNumber) -State Online
+        Invoke-Command -ComputerName $Computername -ScriptBlock { 
+            do { 
+                sleep 1
+                $Disk = Get-Disk -Number $using:Partition.DiskNumber
+                $Partition = Get-Partition -DiskNumber $Disk.Number | Where-Object OperationalStatus -eq "Online"
+            } 
+            until (($Disk.OperationalStatus -eq "Online" ) -and ($Partition.DriveLetter))
+        }
+        $VolumePostAttach = Invoke-Command -ComputerName $target.Computername -ScriptBlock {Get-Volume -FileSystemLabel $using:Target.FilesystemLabel}
+#        $PartitionPostAttach = Get-Partition | Where-Object Driveletter -eq $VolumePostAttach.DriveLetter
+        Write-Verbose "Drive letter is now $($VolumePostAttach.DriveLetter)"
 
         if($RefreshType -eq "SQL"){
-            Invoke-AttachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName)            
+            Invoke-AttachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName) -DriveLetter "$($Volume.DriveLetter):"
         }
 
     }
@@ -81,13 +90,14 @@ function Invoke-DetachSQLDatabase {
 function Invoke-AttachSQLDatabase {
     param(
         [Parameter(Mandatory)]$Computer,
-        [Parameter(Mandatory)]$Database
+        [Parameter(Mandatory)]$Database,
+        [Parameter(Mandatory)]$DriveLetter
     )
     
-    $SQLTarget = Get-EnvironmentRefreshTargetDetails -Hostname $Computer | where databasename -match $Database
+#    $SQLTarget = Get-EnvironmentRefreshTargetDetails -Hostname $Computer | where databasename -match $Database
 
-    $SQLDBFiles = invoke-command -ComputerName $Computer -ScriptBlock {get-childitem -file -Path $($using:SQLTarget.driveletter) | where {$_.name -match "\..df$"}} 
-    $SQLDBFileParameter = ($SQLDBFiles | % {"( FILENAME = N'$($SQLTarget.DriveLetter)\$_' )"}) -join ","
+    $SQLDBFiles = Invoke-Command -ComputerName $Computer -ScriptBlock {get-childitem -File -Path $using:DriveLetter | where Name -match "\..df$"} 
+    $SQLDBFileParameter = ($SQLDBFiles | % {"( FILENAME = N'$($DriveLetter)\$_' )"}) -join ","
     Invoke-SQL -dataSource $Computer -database "master" -sqlCommand "CREATE DATABASE $($Database.toupper()) ON $SQLDBFileParameter FOR ATTACH"
 }
 
@@ -305,8 +315,8 @@ function New-OracleEnvironmentRefreshSnapshot{
 
     $TimeSpan = New-TimeSpan -Minutes 5
     $Credential = Get-PasswordstatePassword -ID 4782 -AsCredential
-    New-SSHSession -ComputerName $EnvironmentrefreshSnapshotDetails.Computername -Credential $Credential -AcceptKey
-    $SSHShellStream = New-SSHShellStream -SSHSession (get-sshsession)
+    $SSHSession = New-SSHSession -ComputerName $EnvironmentrefreshSnapshotDetails.Computername -Credential $Credential -AcceptKey
+    $SSHShellStream = New-SSHShellStream -SSHSession $SSHSession
 #    $SSHShellStream.WriteLine("hostname")
 #    $SSHShellStream.Read()
     $SSHShellStream.WriteLine("prd")
@@ -328,7 +338,7 @@ function New-OracleEnvironmentRefreshSnapshot{
         $SnapshotName = (Get-TervisRefreshSnapshotNamePrefix -Database PRD -EnvironmentName $Environment) + $Date
         Copy-VNXLUNSnapshot -SnapshotName $MasterSnapshotName -SnapshotCopyName $SnapshotName -TervisStorageArraySelection $($EnvironmentrefreshSnapshotDetails.SANLocation)
     }
-    
+    Remove-SSHSession $SshSession    
 }
 
 function Invoke-OracleEnvironmentRefreshProcess {
@@ -401,8 +411,8 @@ function Stop-OracleApplicationTier{
     $TimeSpan = New-TimeSpan -Minutes 5
     $SSHShellStream = New-SSHShellStream -SSHSession $SshSession
     $SSHShellStream.read() | Out-Null
-    $SSHShellStream.WriteLine($ShutdownScriptPath)
-    
+#    $SSHShellStream.WriteLine($ShutdownScriptPath)
+    $SSHShellStream.WriteLine("/patches/cloning/scripts/shutdown_appstier.sh SBX")
     if (-not $SSHShellStream.Expect($ExpectString,$TimeSpan)){
         Write-Error -Message "Command Timed Out" -Category LimitsExceeded -ErrorAction Stop
     }    
@@ -435,10 +445,19 @@ function Stop-OracleDatabaseTier{
 
 function Invoke-ScheduledZetaOracleRefresh{
     try{
-    Stop-OracleApplicationTier -Computername zet-ias01 -Verbose
-    Stop-OracleDatabaseTier -Computername zet-odbee01 -Verbose
-    New-OracleEnvironmentRefreshSnapshot -DatabaseName PRD -EnvironmentName Zeta
-    Invoke-OracleEnvironmentRefreshProcess -Computername zet-ias01
+        $ComputerList = Get-OracleServerDefinition -Environment Zeta
+        $ApplmgrUserCredential = Get-PasswordstatePassword -ID 4767 -AsCredential
+        $OracleUserCredential = Get-PasswordstatePassword -ID 5571 -AsCredential
+        $SystemsUsingOracleUserCredential = $ComputerList | Where-Object ServiceUserAccount -eq "oracle"
+        $SystemsUsingApplmgrUserCredential = $ComputerList | Where-Object ServiceUserAccount -eq "applmgr"
+        New-SSHSession -ComputerName $SystemsUsingOracleUserCredential.Computername -AcceptKey -Credential $OracleUserCredential
+        New-SSHSession -ComputerName $SystemsUsingApplmgrUserCredential.Computername -AcceptKey -Credential $ApplmgrUserCredential
+        $EBSIAS = Get-OracleServerDefinition -SID DEV | Where-Object Services -Match "EBSIAS"
+        $EBSODBEE = Get-OracleServerDefinition -SID DEV | Where-Object Services -Match "EBSODBEE"
+        Stop-OracleIAS -Computername $EBSIAS.ComputerName -SID SBX -SSHSession (get-sshsession -ComputerName $EBSIAS.Computername)
+        Stop-OracleDatabase -Computername $OBIEEODBEE.Computername -SID SBX -SSHSession (get-sshsession -ComputerName $OBIEEODBEE.Computername)
+        New-OracleEnvironmentRefreshSnapshot -DatabaseName PRD -EnvironmentName Zeta
+        Invoke-OracleEnvironmentRefreshProcess -Computername "zet-odbee01"
     }
     catch{
         get-sshsession | remove-sshsession | Out-Null
