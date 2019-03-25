@@ -324,8 +324,8 @@ function New-OracleEnvironmentRefreshSnapshot{
     #Invoke-SSHStreamExpectAction -ShellStream $SSHShellStream -ExpectString "prd:PRD" -TimeOut 300 -Command "/u01/app/oracle/DBA/scripts/snap_db_backup_mode.sh begin" -Action "sync" -Verbose
     $SSHShellStream.WriteLine("/u01/app/oracle/DBA/scripts/snap_db_backup_mode.sh begin")
     $SSHShellStream.Expect("prd:PRD",$TimeSpan)
-    $SSHShellStream.WriteLine("sync")
-    $SSHShellStream.Expect("prd:PRD",$TimeSpan)
+#    $SSHShellStream.WriteLine("sync")
+#    $SSHShellStream.Expect("prd:PRD",$TimeSpan)
     
     New-VNXLUNSnapshot -LUNID $($EnvironmentrefreshSnapshotDetails.LUNID) -SnapshotName $MasterSnapshotName -TervisStorageArraySelection $($EnvironmentrefreshSnapshotDetails.SANLocation)
     
