@@ -108,7 +108,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "Data"
     RefreshType = "Disk"
     DriveLetter = "D:"
-    DiskNumber = "3"
+    DiskNumber = "2"
     SMPID = "3957"
 },
 [pscustomobject][ordered]@{
@@ -119,7 +119,6 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     RefreshType = "DB"
     DiskNumber = "4"
     DriveLetter = "I:"
-    VolumeNumber = "7"
     FileSystemLabel = "DB_MES"
     SMPID = "3997"
 },
@@ -129,9 +128,8 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DatabaseName = "IMS"
     VolumeName = "DB_IMS"
     RefreshType = "DB"
-    DiskNumber = "5"
+    DiskNumber = "3"
     DriveLetter = "P:"
-    VolumeNumber = "8"
     FileSystemLabel = "DB_IMS"
     SMPID = "3996"
 },
@@ -143,7 +141,6 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     RefreshType = "DB"
     DiskNumber = "9"
     DriveLetter = "K:"
-    VolumeNumber = "12"
     FileSystemLabel = "DB_ICMS"
     SMPID = "3912"
 },
@@ -154,8 +151,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     VolumeName = "DB_Tervis_RMSHQ1_VNX5300"
     RefreshType = "DB"
     DiskNumber = "12"
-    DriveLetter = "E:"
-    VolumeNumber = "13"
+    DriveLetter = "F:"
     FileSystemLabel = "DB_TervisRMSHQ1_2"
     SMPID = "3999"
 },
@@ -165,7 +161,7 @@ $EnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
     DatabaseName = "Tervis"
     VolumeName = "Data"
     RefreshType = "Disk"
-    DiskNumber = "3"
+    DiskNumber = "2"
     DriveLetter = "D"
     SMPID = "4004"
 }
@@ -218,7 +214,7 @@ $OracleEnvironmentRefreshTargetDetails = [pscustomobject][ordered]@{
 },
 [pscustomobject][ordered]@{
     Computername = "EPS-ODBEE01"
-    EnvironmentName = "Delta"
+    EnvironmentName = "Epsilon"
     DatabaseName = "PRD"
     RefreshType = "ODBEE"
     SMPID = "63844","63842"

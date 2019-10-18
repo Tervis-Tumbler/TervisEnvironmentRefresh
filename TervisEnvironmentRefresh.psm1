@@ -45,28 +45,43 @@ function Invoke-EnvironmentRefreshProcess {
         if($RefreshType -eq "SQL"){
             Invoke-DetachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName)            
         }
-        $Volume = Invoke-Command -ComputerName $target.Computername -ScriptBlock {Get-Volume -FileSystemLabel $using:Target.FilesystemLabel}
-        $Partition = Invoke-Command -ComputerName $target.Computername -ScriptBlock {Get-Partition | Where-Object Driveletter -eq $using:Volume.DriveLetter}
-        Write-Verbose "Setting Disk $($Partition.DiskNumber) - $($Volume.DriveLetter) - $($Volume.FileSystemLabel) Offline"
-        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($Partition.DiskNumber) -State Offline
-        Write-Verbose "Dismounting $($target.SMPID)"
-        Dismount-VNXSnapshot -SMPID $($Target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
-        
-        Write-Verbose "Mounting $($SnapshottoAttach.SnapName)"
-        Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
-        Write-Verbose "Setting disk $($Partition.DiskNumber) online"
-        Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($Partition.DiskNumber) -State Online
-        Invoke-Command -ComputerName $Computername -ScriptBlock { 
-            do { 
-                sleep 1
-                $Disk = Get-Disk -Number $using:Partition.DiskNumber
-                $Partition = Get-Partition -DiskNumber $Disk.Number | Where-Object OperationalStatus -eq "Online"
-            } 
-            until (($Disk.OperationalStatus -eq "Online" ) -and ($Partition.DriveLetter))
+        if($target.Computername -eq "dlt-sql"){
+            $Volume = Invoke-Command -ComputerName $target.Computername -ScriptBlock {Get-Volume -FileSystemLabel $using:Target.FilesystemLabel}
+            $Partition = Invoke-Command -ComputerName $target.Computername -ScriptBlock {Get-Partition | Where-Object Driveletter -eq $using:Volume.DriveLetter}
+            Write-Verbose "Setting Disk $($Partition.DiskNumber) - $($Volume.DriveLetter) - $($Volume.FileSystemLabel) Offline"
+            Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($Partition.DiskNumber) -State Offline
+            Write-Verbose "Dismounting $($target.SMPID)"
+            Dismount-VNXSnapshot -SMPID $($Target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
+            
+            Write-Verbose "Mounting $($SnapshottoAttach.SnapName)"
+            Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
+            Write-Verbose "Setting disk $($Partition.DiskNumber) online"
+            Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($Partition.DiskNumber) -State Online
+            Invoke-Command -ComputerName $Computername -ScriptBlock { 
+                do { 
+                    sleep 1
+                    $Disk = Get-Disk -Number $using:Partition.DiskNumber
+                    $Partition = Get-Partition -DiskNumber $Disk.Number | Where-Object OperationalStatus -eq "Online"
+                } 
+                until (($Disk.OperationalStatus -eq "Online" ) -and ($Partition.DriveLetter))
+            }
+            $VolumePostAttach = Invoke-Command -ComputerName $target.Computername -ScriptBlock {Get-Volume -FileSystemLabel $using:Target.FilesystemLabel}
+    #        $PartitionPostAttach = Get-Partition | Where-Object Driveletter -eq $VolumePostAttach.DriveLetter
+            Write-Verbose "Drive letter is now $($VolumePostAttach.DriveLetter)"
         }
-        $VolumePostAttach = Invoke-Command -ComputerName $target.Computername -ScriptBlock {Get-Volume -FileSystemLabel $using:Target.FilesystemLabel}
-#        $PartitionPostAttach = Get-Partition | Where-Object Driveletter -eq $VolumePostAttach.DriveLetter
-        Write-Verbose "Drive letter is now $($VolumePostAttach.DriveLetter)"
+#        Elseif($Target.Computername -eq "eps-sql"){
+        Else{
+            Write-Verbose "Setting Disk $($target.DiskNumber) Offline"
+#            Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Offline
+            Write-Verbose "Dismounting $($target.SMPID)"
+            Dismount-VNXSnapshot -SMPID $($Target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
+            
+            Write-Verbose "Mounting $($SnapshottoAttach.SnapName)"
+            Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
+            Write-Verbose "Setting disk $($target.disknumber) online"
+            Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Online
+            Invoke-Command -ComputerName $Computername -ScriptBlock { do { sleep 1} until (Test-Path $using:target.driveletter) }
+        }
 
         if($RefreshType -eq "SQL"){
             Invoke-AttachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName) -DriveLetter "$($Volume.DriveLetter):"
