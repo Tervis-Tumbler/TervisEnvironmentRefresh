@@ -422,45 +422,23 @@ function Get-TervisRefreshSnapshotNamePrefix{
 function Stop-OracleApplicationTier{
     [CmdletBinding()]
     param(
-        [parameter(mandatory)][ValidateSet("zet-ias01")]$Computername
+        [parameter(mandatory)]$SSHSession
     )
     $ShutdownScriptPath = "/patches/cloning/scripts/shutdown_appstier.sh SBX"
-    $ExpectString = '[applmgr@zet-ias01 ~]$'
-    $Credential = Find-PasswordstatePassword -HostName ($Computername + ".tervis.prv") -UserName "applmgr" -AsCredential
-    $SSHSession = New-SSHSession -HostName $Computername -Credential $Credential -AcceptKey
-    $TimeSpan = New-TimeSpan -Minutes 5
-    $SSHShellStream = New-SSHShellStream -SSHSession $SshSession
-    $SSHShellStream.read() | Out-Null
-#    $SSHShellStream.WriteLine($ShutdownScriptPath)
-    $SSHShellStream.WriteLine("/patches/cloning/scripts/shutdown_appstier.sh SBX")
-    if (-not $SSHShellStream.Expect($ExpectString,$TimeSpan)){
+    if (-not (Invoke-SSHCommand -SshSession $SshSession -Command $ShutdownScriptPath)){
         Write-Error -Message "Command Timed Out" -Category LimitsExceeded -ErrorAction Stop
     }    
-    $DebugOutput = $SSHShellStream.Read()
-    Write-Debug $DebugOutput
-    Get-SSHSession | Remove-SSHSession
 }
 
 function Stop-OracleDatabaseTier{
     [CmdletBinding()]
     param(
-        [parameter(mandatory)][ValidateSet("zet-odbee01")]$Computername
+        [parameter(mandatory)]$SSHSession
     )
     $ShutdownScriptPath = "/patches/cloning/scripts/shutdown_dbtier.sh SBX"
-    $ExpectString = '[oracle@zet-odbee01 ~]$'
-    $Credential = Find-PasswordstatePassword -HostName ($Computername + ".tervis.prv") -UserName "Oracle" -AsCredential
-    $SSHSession = New-SSHSession -HostName $Computername -Credential $Credential
-    $TimeSpan = New-TimeSpan -Minutes 5
-    $SSHShellStream = New-SSHShellStream -SSHSession $SshSession
-    $SSHShellStream.read() | Out-Null
-    $SSHShellStream.WriteLine($ShutdownScriptPath)
-    
-    if (-not $SSHShellStream.Expect($ExpectString,$TimeSpan)){
+    if (-not (Invoke-SSHCommand -SshSession $SshSession -Command $ShutdownScriptPath)){
         Write-Error -Message "Command Timed Out" -Category LimitsExceeded -ErrorAction Stop
     }    
-    $DebugOutput = $SSHShellStream.Read()
-    Write-Debug $DebugOutput
-    Get-SSHSession | Remove-SSHSession
 }
 
 function Invoke-ScheduledZetaOracleRefresh{
