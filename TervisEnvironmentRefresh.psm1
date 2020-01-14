@@ -1,11 +1,11 @@
-#Requires -Modules TervisEnvironment,TervisStorage
+﻿#Requires -Modules TervisEnvironment,TervisStorage
 $ModulePath = (Get-Module -ListAvailable TervisEnvironmentRefresh).ModuleBase
 . $ModulePath\RefreshDefinitions.ps1
 
 
 function Invoke-EnvironmentRefreshProcessForStores {
     param(
-        [ValidateSet(”Delta”,“Epsilon”,"ALL")]
+        [ValidateSet("Delta","Epsilon","ALL")]
         [String]$EnvironmentName
     )
     if($EnvironmentName -eq "ALL"){
@@ -85,8 +85,8 @@ function Invoke-EnvironmentRefreshProcess {
 
         if($RefreshType -eq "SQL"){
             if($target.Computername -eq "dlt-sql"){
-            Invoke-AttachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName) -DriveLetter "$($Volume.DriveLetter):"
-        }
+                Invoke-AttachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName) -DriveLetter "$($Volume.DriveLetter):"
+            }
             else{
                 Write-Verbose "Attach Database $($Target.Computername)  $($Target.DatabaseName)  $($Target.DriveLetter)"
             }
@@ -160,10 +160,10 @@ $($State) disk
 
 function New-EnvironmentRefreshSnapshot{
     param(
-        [ValidateSet(”DB_IMS”,“DB_MES”,"DB_ICMS","DB_Shipping","DB_Tervis_RMSHQ1","P-WCSDATA","ALL")]
+        [ValidateSet("DB_IMS","DB_MES","DB_ICMS","DB_Shipping","DB_Tervis_RMSHQ1","P-WCSDATA","ALL")]
         [String]$LUNName,
 
-        [ValidateSet(”Delta”,“Epsilon”,"ALL")]
+        [ValidateSet("Delta","Epsilon","ALL")]
         [String]$EnvironmentName
     )
     $DATE = (get-date).tostring("yyyyMMdd")
@@ -196,7 +196,7 @@ function Get-EnvironmentRefreshStoreDetails{
         [string]$DatabaseName,
 
         [Parameter(Mandatory, ParameterSetName = "DetailsbyEnvironment")]
-        [ValidateSet(”Delta”,“Epsilon”)]
+        [ValidateSet("Delta","Epsilon")]
         [string]$Environment,
     
         [Parameter(Mandatory, ParameterSetName = "ListOnly")]
@@ -269,7 +269,7 @@ function Get-EnvironmentRefreshTargetDetails{
         $Databasename,
 
         [Parameter(mandatory, ParameterSetName = "DetailsbyDBName")]
-        [ValidateSet(”Delta”,“Epsilon”)]
+        [ValidateSet("Delta","Epsilon")]
         $EnvironmentName,
 
         [Parameter(mandatory, ParameterSetName = "DetailsbyHostname")]
@@ -295,7 +295,7 @@ function Get-OracleEnvironmentRefreshTargetDetails{
         $Databasename,
 
         [Parameter(mandatory, ParameterSetName = "DetailsbyDBName")]
-        [ValidateSet(”Delta”,“Epsilon”)]
+        [ValidateSet("Delta","Epsilon")]
         $EnvironmentName,
 
         [Parameter(mandatory, ParameterSetName = "DetailsbyHostname")]
@@ -484,7 +484,7 @@ function Install-OracleZetaScheduledEnvironmentRefreshPowershellApplication {
     Install-PowerShellApplication -ComputerName $ComputerName `
         -EnvironmentName "Infrastructure" `
         -ModuleName "TervisEnvironmentRefresh" `
-        -TervisModuleDependencies PasswordstatePowershell,TervisMicrosoft.PowerShell.Utility,TervisMailMessage,microsoft.powershell.Management,PasswordstatePowershell,TervisEnvironment,TervisEnvironmentRefresh,tervismicrosoft.powershell.Utility,TervisStorage,TervisTechnicalServicesLinux `
+        -TervisModuleDependencies TervisMicrosoft.PowerShell.Utility,TervisMailMessage,microsoft.powershell.Management,PasswordstatePowershell,TervisEnvironment,TervisEnvironmentRefresh,tervismicrosoft.powershell.Utility,TervisStorage,TervisTechnicalServicesLinux `
         -PowerShellGalleryDependencies "Posh-SSH" `
         -ScheduledTasksCredential $ScheduledTaskCredential `
         -ScheduledTaskName "OracleZetaScheduledEnvironmentRefresh" `
