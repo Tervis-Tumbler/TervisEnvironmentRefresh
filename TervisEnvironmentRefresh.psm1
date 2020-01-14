@@ -1,4 +1,4 @@
-﻿#Requires -Modules TervisEnvironment,TervisStorage
+#Requires -Modules TervisEnvironment,TervisStorage
 $ModulePath = (Get-Module -ListAvailable TervisEnvironmentRefresh).ModuleBase
 . $ModulePath\RefreshDefinitions.ps1
 
@@ -79,12 +79,17 @@ function Invoke-EnvironmentRefreshProcess {
             Write-Verbose "Mounting $($SnapshottoAttach.SnapName)"
             Mount-VNXSnapshot -SnapshotName $($SnapshottoAttach.SnapName) -SMPID $($target.SMPID) -TervisStorageArraySelection $($SANLocation.SANLocation)
             Write-Verbose "Setting disk $($target.disknumber) online"
-            Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Online
-            Invoke-Command -ComputerName $Computername -ScriptBlock { do { sleep 1} until (Test-Path $using:target.driveletter) }
+            #Set-EnvironmentRefreshDiskState -Computername $($target.Computername) -DiskNumber $($target.DiskNumber) -State Online
+            #Invoke-Command -ComputerName $Computername -ScriptBlock { do { sleep 1} until (Test-Path $using:target.driveletter) }
         }
 
         if($RefreshType -eq "SQL"){
+            if($target.Computername -eq "dlt-sql"){
             Invoke-AttachSQLDatabase -Computer $($Target.Computername) -Database $($Target.DatabaseName) -DriveLetter "$($Volume.DriveLetter):"
+        }
+            else{
+                Write-Verbose "Attach Database $($Target.Computername)  $($Target.DatabaseName)  $($Target.DriveLetter)"
+            }
         }
 
     }
