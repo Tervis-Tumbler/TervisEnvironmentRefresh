@@ -448,12 +448,12 @@ function Invoke-ScheduledZetaOracleRefresh{
         $OracleUserCredential = Get-PasswordstatePassword -ID 5571 -AsCredential
         $SystemsUsingOracleUserCredential = $ComputerList | Where-Object ServiceUserAccount -eq "oracle"
         $SystemsUsingApplmgrUserCredential = $ComputerList | Where-Object ServiceUserAccount -eq "applmgr"
-        New-SSHSession -ComputerName $SystemsUsingOracleUserCredential.Computername -AcceptKey -Credential $OracleUserCredential
-        New-SSHSession -ComputerName $SystemsUsingApplmgrUserCredential.Computername -AcceptKey -Credential $ApplmgrUserCredential
-        $EBSIAS = Get-OracleServerDefinition -SID DEV | Where-Object Services -Match "EBSIAS"
-        $EBSODBEE = Get-OracleServerDefinition -SID DEV | Where-Object Services -Match "EBSODBEE"
-        Stop-OracleIAS -Computername $EBSIAS.ComputerName -SID SBX -SSHSession (get-sshsession -ComputerName $EBSIAS.Computername)
-        Stop-OracleDatabase -Computername $OBIEEODBEE.Computername -SID SBX -SSHSession (get-sshsession -ComputerName $OBIEEODBEE.Computername)
+        $ODBEESSHSession = New-SSHSession -ComputerName $SystemsUsingOracleUserCredential.Computername -AcceptKey -Credential $OracleUserCredential
+        $IASSSHSession = New-SSHSession -ComputerName $SystemsUsingApplmgrUserCredential.Computername -AcceptKey -Credential $ApplmgrUserCredential
+        $EBSIASDefinition = Get-OracleServerDefinition -SID SBX | Where-Object Services -Match "EBSIAS"
+        $EBSODBEEDefinition = Get-OracleServerDefinition -SID SBX | Where-Object Services -Match "EBSODBEE"
+        Stop-OracleApplicationTier -SSHSession $IASSSHSession -Verbose
+        Stop-OracleDatabaseTier -SSHSession $ODBEESSHSession -Verbose
         New-OracleEnvironmentRefreshSnapshot -DatabaseName PRD -EnvironmentName Zeta
         Invoke-OracleEnvironmentRefreshProcess -Computername "zet-odbee01"
     }
@@ -483,7 +483,7 @@ function Install-OracleZetaScheduledEnvironmentRefreshPowershellApplication {
     Install-PowerShellApplication -ComputerName $ComputerName `
         -EnvironmentName "Infrastructure" `
         -ModuleName "TervisEnvironmentRefresh" `
-        -TervisModuleDependencies PasswordstatePowershell,TervisMicrosoft.PowerShell.Utility,TervisMailMessage,microsoft.powershell.Management,PasswordstatePowershell,TervisEnvironment,TervisEnvironmentRefresh,tervismicrosoft.powershell.Utility,TervisStorage `
+        -TervisModuleDependencies PasswordstatePowershell,TervisMicrosoft.PowerShell.Utility,TervisMailMessage,microsoft.powershell.Management,PasswordstatePowershell,TervisEnvironment,TervisEnvironmentRefresh,tervismicrosoft.powershell.Utility,TervisStorage,TervisTechnicalServicesLinux `
         -PowerShellGalleryDependencies "Posh-SSH" `
         -ScheduledTasksCredential $ScheduledTaskCredential `
         -ScheduledTaskName "OracleZetaScheduledEnvironmentRefresh" `
