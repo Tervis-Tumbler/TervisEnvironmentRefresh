@@ -362,6 +362,7 @@ function New-OracleEnvironmentRefreshSnapshot{
 }
 
 function Invoke-OracleEnvironmentRefreshProcess {
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory)]$Computername
     )
